@@ -1,4 +1,4 @@
-import { google } from "googleapis";
+import { google, calendar_v3 } from "googleapis";
 import { db } from "@/lib/db";
 import { decrypt, encrypt } from "@/lib/encryption";
 import type { CalendarEvent } from "@prisma/client";
@@ -53,7 +53,7 @@ export async function syncCalendarEvents(userId: string): Promise<number> {
   const timeMin = new Date().toISOString();
   const timeMax = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const params: Parameters<typeof calendar.events.list>[0] = {
+  let params: calendar_v3.Params$Resource$Events$List = {
     calendarId: conn.calendarId,
     timeMin,
     timeMax,
@@ -64,16 +64,12 @@ export async function syncCalendarEvents(userId: string): Promise<number> {
 
   if (conn.syncToken) {
     // Use incremental sync when possible
-    try {
-      params.syncToken = conn.syncToken;
-      delete params.timeMin;
-      delete params.timeMax;
-    } catch {
-      // syncToken expired — fall back to full sync
-      delete params.syncToken;
-      params.timeMin = timeMin;
-      params.timeMax = timeMax;
-    }
+    params = {
+      calendarId: conn.calendarId,
+      syncToken: conn.syncToken,
+      singleEvents: true,
+      maxResults: 250,
+    };
   }
 
   const response = await calendar.events.list(params);
