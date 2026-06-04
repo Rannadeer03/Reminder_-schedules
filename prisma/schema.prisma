@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── NextAuth Models ──────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Application Models ───────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts           Account[]
+  sessions           Session[]
+  calendarConnection CalendarConnection?
+  calendarEvents     CalendarEvent[]
+  reminders          Reminder[]
+  callLogs           CallLog[]
+  settings           Settings?
+}
+
+model CalendarConnection {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  // AES-256-GCM encrypted tokens stored as "iv:authTag:ciphertext" hex
+  accessToken  String   @db.Text
+  refreshToken String   @db.Text
+  expiresAt    DateTime
+  calendarId   String   @default("primary")
+  email        String
+  syncToken    String?  @db.Text
+  lastSyncedAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CalendarEvent {
+  id            String    @id @default(cuid())
+  googleEventId String
+  userId        String
+  calendarId    String    @default("primary")
+  title         String
+  startTime     DateTime
+  endTime       DateTime
+  timezone      String    @default("UTC")
+  location      String?
+  description   String?   @db.Text
+  recurrenceId  String?
+  isRecurring   Boolean   @default(false)
+  status        String    @default("confirmed") // confirmed | tentative | cancelled
+  htmlLink      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminders Reminder[]
+
+  @@unique([googleEventId, userId])
+  @@index([userId, startTime])
+}
+
+model Reminder {
+  id          String         @id @default(cuid())
+  eventId     String
+  userId      String
+  scheduledAt DateTime
+  status      ReminderStatus @default(PENDING)
+  sentAt      DateTime?
+  callSid     String?
+  errorMsg    String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([status, scheduledAt])
+}
+
+model CallLog {
+  id          String     @id @default(cuid())
+  userId      String
+  eventId     String?
+  callSid     String?    @unique
+  toNumber    String
+  fromNumber  String
+  status      CallStatus @default(INITIATED)
+  duration    Int?       // seconds
+  twimlScript String?    @db.Text
+  startedAt   DateTime   @default(now())
+  endedAt     DateTime?
+  errorMsg    String?
+  createdAt   DateTime   @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Settings {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  phoneNumber     String?
+  reminderMinutes Int      @default(10)
+  isActive        Boolean  @default(true)
+  smsBackup       Boolean  @default(false)
+  whatsappBackup  Boolean  @default(false)
+  voiceLanguage   String   @default("en-US")
+  timezone        String   @default("UTC")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum ReminderStatus {
+  PENDING
+  CALLING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum CallStatus {
+  INITIATED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  BUSY
+  NO_ANSWER
+  CANCELLED
+}
