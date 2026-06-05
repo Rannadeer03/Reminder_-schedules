@@ -16,24 +16,19 @@ async function getValidTokens(userId: string) {
   if (!conn) throw new Error("No calendar connection found for user");
 
   const oauth2Client = createOAuthClient();
-  const accessToken = decrypt(conn.accessToken);
-  const refreshToken = decrypt(conn.refreshToken);
-
   oauth2Client.setCredentials({
-    access_token: accessToken,
-    refresh_token: refreshToken,
-    expiry_date: conn.expiresAt.getTime(),
+    access_token:  decrypt(conn.accessToken),
+    refresh_token: decrypt(conn.refreshToken),
+    expiry_date:   conn.expiresAt.getTime(),
   });
 
-  // Refresh if within 5 minutes of expiry
   if (conn.expiresAt.getTime() - Date.now() < 5 * 60 * 1000) {
     const { credentials } = await oauth2Client.refreshAccessToken();
-    const newAccess = encrypt(credentials.access_token!);
     await db.calendarConnection.update({
       where: { userId },
       data: {
-        accessToken: newAccess,
-        expiresAt: new Date(credentials.expiry_date!),
+        accessToken: encrypt(credentials.access_token!),
+        expiresAt:   new Date(credentials.expiry_date!),
       },
     });
     oauth2Client.setCredentials(credentials);
@@ -42,16 +37,27 @@ async function getValidTokens(userId: string) {
   return oauth2Client;
 }
 
-async function fetchAndUpsertEvents(
-  userId: string,
-  calendar: ReturnType<typeof google.calendar>,
-  conn: NonNullable<Awaited<ReturnType<typeof db.calendarConnection.findUnique>>>,
-  params: calendar_v3.Params$Resource$Events$List
-): Promise<{ synced: number; nextSyncToken: string | null | undefined }> {
-  const response = await calendar.events.list(params);
-  const items = response.data.items ?? [];
-  let synced = 0;
+function getHttpStatus(err: unknown): number | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const e = err as Record<string, unknown>;
+  // GaxiosError: e.status (number) is set directly
+  if (typeof e.status === "number") return e.status;
+  // Some versions nest it under response.status
+  if (e.response && typeof e.response === "object") {
+    const r = e.response as Record<string, unknown>;
+    if (typeof r.status === "number") return r.status;
+  }
+  // Older googleapis: e.code
+  if (typeof e.code === "number") return e.code;
+  return undefined;
+}
 
+async function upsertEvents(
+  userId: string,
+  calendarId: string,
+  items: calendar_v3.Schema$Event[]
+): Promise<number> {
+  let synced = 0;
   for (const item of items) {
     if (!item.id || !item.summary) continue;
 
@@ -77,33 +83,32 @@ async function fetchAndUpsertEvents(
       create: {
         googleEventId: item.id,
         userId,
-        calendarId: conn.calendarId,
-        title: item.summary,
+        calendarId,
+        title:        item.summary,
         startTime,
         endTime,
         timezone,
-        location:    item.location        ?? null,
-        description: item.description     ?? null,
+        location:     item.location         ?? null,
+        description:  item.description      ?? null,
         recurrenceId: item.recurringEventId ?? null,
-        isRecurring: !!item.recurringEventId,
+        isRecurring:  !!item.recurringEventId,
         status,
-        htmlLink: item.htmlLink ?? null,
+        htmlLink:     item.htmlLink ?? null,
       },
       update: {
-        title: item.summary,
+        title:       item.summary,
         startTime,
         endTime,
         timezone,
         location:    item.location    ?? null,
         description: item.description ?? null,
         status,
-        updatedAt: new Date(),
+        updatedAt:   new Date(),
       },
     });
     synced++;
   }
-
-  return { synced, nextSyncToken: response.data.nextSyncToken };
+  return synced;
 }
 
 export async function syncCalendarEvents(userId: string): Promise<number> {
@@ -116,53 +121,58 @@ export async function syncCalendarEvents(userId: string): Promise<number> {
   const timeMin = new Date().toISOString();
   const timeMax = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const fullSyncParams: calendar_v3.Params$Resource$Events$List = {
-    calendarId: conn.calendarId,
-    timeMin,
-    timeMax,
-    singleEvents: true,
-    orderBy: "startTime",
-    maxResults: 250,
-  };
-
-  let synced = 0;
+  let synced        = 0;
   let nextSyncToken: string | null | undefined;
 
   if (conn.syncToken) {
     try {
-      // Incremental sync — only fetch changes since last sync
-      const result = await fetchAndUpsertEvents(userId, calendar, conn, {
-        calendarId: conn.calendarId,
-        syncToken: conn.syncToken,
+      const res = await calendar.events.list({
+        calendarId:  conn.calendarId,
+        syncToken:   conn.syncToken,
         singleEvents: true,
-        maxResults: 250,
+        maxResults:  250,
       });
-      synced        = result.synced;
-      nextSyncToken = result.nextSyncToken;
-    } catch (err: unknown) {
-      // 410 Gone = sync token expired; clear it and fall back to full sync
-      const status = (err as { status?: number; code?: number })?.status
-                   ?? (err as { status?: number; code?: number })?.code;
-      if (status === 410) {
-        console.warn(`[google-calendar] Sync token expired for user ${userId}, doing full sync`);
+      synced        = await upsertEvents(userId, conn.calendarId, res.data.items ?? []);
+      nextSyncToken = res.data.nextSyncToken;
+    } catch (err) {
+      const httpStatus = getHttpStatus(err);
+      console.warn(`[google-calendar] Incremental sync error for user ${userId}: status=${httpStatus}`, err);
+
+      if (httpStatus === 410) {
+        // Sync token expired — clear it and fall back to full sync
+        console.warn(`[google-calendar] Sync token expired, clearing and running full sync`);
         await db.calendarConnection.update({
           where: { userId },
           data: { syncToken: null },
         });
-        const result = await fetchAndUpsertEvents(userId, calendar, conn, fullSyncParams);
-        synced        = result.synced;
-        nextSyncToken = result.nextSyncToken;
+        const res = await calendar.events.list({
+          calendarId:  conn.calendarId,
+          timeMin,
+          timeMax,
+          singleEvents: true,
+          orderBy:     "startTime",
+          maxResults:  250,
+        });
+        synced        = await upsertEvents(userId, conn.calendarId, res.data.items ?? []);
+        nextSyncToken = res.data.nextSyncToken;
       } else {
         throw err;
       }
     }
   } else {
-    const result = await fetchAndUpsertEvents(userId, calendar, conn, fullSyncParams);
-    synced        = result.synced;
-    nextSyncToken = result.nextSyncToken;
+    const res = await calendar.events.list({
+      calendarId:  conn.calendarId,
+      timeMin,
+      timeMax,
+      singleEvents: true,
+      orderBy:     "startTime",
+      maxResults:  250,
+    });
+    synced        = await upsertEvents(userId, conn.calendarId, res.data.items ?? []);
+    nextSyncToken = res.data.nextSyncToken;
   }
 
-  // Always update lastSyncedAt — even when there are zero changes
+  // Always update lastSyncedAt regardless of whether anything changed
   await db.calendarConnection.update({
     where: { userId },
     data: {
@@ -182,7 +192,7 @@ export async function getUpcomingEvents(
     where: {
       userId,
       startTime: { gte: new Date() },
-      status: { not: "cancelled" },
+      status:    { not: "cancelled" },
     },
     orderBy: { startTime: "asc" },
     take: limit,

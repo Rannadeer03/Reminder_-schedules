@@ -4,12 +4,11 @@ import { syncCalendarEvents } from "@/lib/google-calendar";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+async function handleSync() {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
   try {
     const synced = await syncCalendarEvents(session.user.id);
     return NextResponse.json({ synced, message: `Synced ${synced} events` });
@@ -21,3 +20,6 @@ export async function POST() {
     );
   }
 }
+
+export async function GET()  { return handleSync(); }
+export async function POST() { return handleSync(); }
