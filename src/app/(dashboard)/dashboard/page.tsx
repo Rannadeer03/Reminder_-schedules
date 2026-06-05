@@ -39,21 +39,27 @@ export default async function DashboardPage() {
   const sentCount   = reminderStats.find((s) => s.status === "SENT")?._count.status   ?? 0;
   const failedCount = reminderStats.find((s) => s.status === "FAILED")?._count.status ?? 0;
 
+  // Use event timezone when user hasn't explicitly set a timezone preference
+  const displayTimezone =
+    settings?.timezone && settings.timezone !== "UTC"
+      ? settings.timezone
+      : upcomingEvents.find((e) => e.timezone && e.timezone !== "UTC")?.timezone ??
+        settings?.timezone ?? "UTC";
+
   return (
     <div className="space-y-10">
 
       {/* Page heading */}
-      <div className="border-b pb-8" style={{ borderColor: "#E2DDD5" }}>
-        <h1 className="font-display text-4xl italic" style={{ color: "#1C1914" }}>
-          Dashboard
-        </h1>
-        <p className="font-body text-sm mt-1.5" style={{ color: "#7A756E" }}>
+      <div className="border-b pb-8" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+        <h1 className="font-display font-extrabold text-3xl text-white">Dashboard</h1>
+        <p className="font-body text-sm mt-1.5 text-slate-500">
           Monitor your meeting reminders and call history.
         </p>
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px border border-[#E2DDD5] bg-[#E2DDD5]">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px rounded-2xl overflow-hidden"
+           style={{ background: "rgba(255,255,255,0.06)" }}>
         <StatsCard
           title="Reminders Sent"
           value={sentCount}
@@ -111,12 +117,12 @@ export default async function DashboardPage() {
           />
         </div>
         <div className="lg:col-span-2">
-          <UpcomingMeetings events={upcomingEvents} timezone={settings?.timezone ?? "UTC"} />
+          <UpcomingMeetings events={upcomingEvents} timezone={displayTimezone} />
         </div>
       </div>
 
       {/* Call Logs */}
-      <CallLogs logs={recentCalls} />
+      <CallLogs logs={recentCalls} timezone={displayTimezone} />
     </div>
   );
 }

@@ -16,22 +16,15 @@ function SettingsSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="border" style={{ background: "#FDFCFA", borderColor: "#E2DDD5" }}>
-      <div className="px-8 pt-7 pb-5 border-b" style={{ borderColor: "#E2DDD5" }}>
+    <div className="glass rounded-2xl overflow-hidden">
+      <div className="px-8 pt-7 pb-5 border-b" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
         <div className="flex items-start gap-4">
-          <span
-            className="font-body text-[10px] tracking-[0.25em] uppercase font-medium mt-1"
-            style={{ color: "#C9A96E" }}
-          >
+          <span className="font-body text-[10px] tracking-[0.25em] uppercase font-medium mt-1 text-blue-400">
             {number}
           </span>
           <div>
-            <h2 className="font-display text-xl italic" style={{ color: "#1C1914" }}>
-              {title}
-            </h2>
-            <p className="font-body text-sm mt-1" style={{ color: "#7A756E" }}>
-              {description}
-            </p>
+            <h2 className="font-display font-bold text-xl text-white">{title}</h2>
+            <p className="font-body text-sm mt-1 text-slate-500">{description}</p>
           </div>
         </div>
       </div>
@@ -48,11 +41,9 @@ export default async function SettingsPage() {
   return (
     <div className="space-y-10 max-w-2xl">
       {/* Page heading */}
-      <div className="border-b pb-8" style={{ borderColor: "#E2DDD5" }}>
-        <h1 className="font-display text-4xl italic" style={{ color: "#1C1914" }}>
-          Settings
-        </h1>
-        <p className="font-body text-sm mt-1.5" style={{ color: "#7A756E" }}>
+      <div className="border-b pb-8" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+        <h1 className="font-display font-extrabold text-3xl text-white">Settings</h1>
+        <p className="font-body text-sm mt-1.5 text-slate-500">
           Configure your call reminder preferences.
         </p>
       </div>

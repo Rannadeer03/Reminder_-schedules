@@ -2,52 +2,88 @@
 @tailwind components;
 @tailwind utilities;
 
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* ── Keyframes ──────────────────────────────────────────────────── */
 
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(32px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 @keyframes fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+@keyframes blob-1 {
+  0%,100% { transform: translate(0,0) scale(1); }
+  30%     { transform: translate(6%,-9%) scale(1.10); }
+  65%     { transform: translate(-5%,7%) scale(0.92); }
+}
+@keyframes blob-2 {
+  0%,100% { transform: translate(0,0) scale(1); }
+  35%     { transform: translate(-7%,6%) scale(1.12); }
+  70%     { transform: translate(8%,-6%) scale(0.90); }
+}
+@keyframes blob-3 {
+  0%,100% { transform: translate(0,0) scale(1); }
+  45%     { transform: translate(9%,8%) scale(1.08); }
+  80%     { transform: translate(-8%,-5%) scale(0.94); }
+}
+@keyframes ring-expand {
+  0%   { transform: scale(0.7); opacity: 0.6; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes float-y {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-12px); }
+}
+@keyframes float-y-delayed {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(10px); }
+}
+@keyframes shimmer-right {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes step-glow {
+  0%,100% { box-shadow: 0 0 0 rgba(99,102,241,0);   border-color: rgba(255,255,255,0.08); }
+  50%     { box-shadow: 0 0 28px rgba(99,102,241,0.35); border-color: rgba(99,102,241,0.5); }
+}
+@keyframes dot-ping {
+  0%   { transform: scale(1); opacity: 1; }
+  75%, 100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ── Base ───────────────────────────────────────────────────────── */
 
 @layer base {
   :root {
-    /* Warm parchment theme for the dashboard */
-    --background: 38 22% 95%;
-    --foreground: 25 30% 10%;
-    --card: 36 18% 99%;
-    --card-foreground: 25 30% 10%;
-    --popover: 36 18% 99%;
-    --popover-foreground: 25 30% 10%;
-    --primary: 36 48% 58%;
-    --primary-foreground: 25 30% 10%;
-    --secondary: 35 16% 91%;
-    --secondary-foreground: 25 20% 28%;
-    --muted: 35 16% 91%;
-    --muted-foreground: 30 10% 50%;
-    --accent: 36 48% 58%;
-    --accent-foreground: 25 30% 10%;
+    --background: 222 47% 4%;
+    --foreground: 214 32% 91%;
+    --card: 222 40% 6%;
+    --card-foreground: 214 32% 91%;
+    --popover: 222 40% 8%;
+    --popover-foreground: 214 32% 91%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 40% 12%;
+    --secondary-foreground: 214 32% 80%;
+    --muted: 222 40% 10%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 222 40% 12%;
+    --accent-foreground: 214 32% 91%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 34 14% 86%;
-    --input: 34 14% 86%;
-    --ring: 36 48% 58%;
+    --border: 222 40% 14%;
+    --input: 222 40% 12%;
+    --ring: 217 91% 60%;
     --radius: 0.5rem;
   }
 }
-
 @layer base {
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
   body {
     @apply bg-background text-foreground font-body;
     -webkit-font-smoothing: antialiased;
@@ -55,27 +91,80 @@
   }
 }
 
-@layer utilities {
-  /* Animation helpers */
-  .anim-fade-up {
-    animation: fade-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-  .anim-fade-in {
-    animation: fade-in 0.7s ease both;
-  }
-  .anim-delay-0   { animation-delay: 0s; }
-  .anim-delay-1   { animation-delay: 0.12s; }
-  .anim-delay-2   { animation-delay: 0.24s; }
-  .anim-delay-3   { animation-delay: 0.36s; }
-  .anim-delay-4   { animation-delay: 0.50s; }
-  .anim-delay-5   { animation-delay: 0.65s; }
-  .anim-delay-6   { animation-delay: 0.80s; }
+/* ── Utilities ──────────────────────────────────────────────────── */
 
-  /* Landing page background */
-  .landing-bg {
-    background-color: #0C0A08;
-    background-image:
-      radial-gradient(ellipse 75% 55% at 50% -5%, rgba(201, 169, 110, 0.10) 0%, transparent 62%),
-      radial-gradient(ellipse 45% 35% at 85% 95%, rgba(140, 105, 45, 0.06) 0%, transparent 55%);
+@layer utilities {
+  /* Staggered fade-up for hero */
+  .anim-fade-up { animation: fade-up  0.85s cubic-bezier(0.22,1,0.36,1) both; }
+  .anim-fade-in { animation: fade-in  0.7s ease both; }
+  .anim-delay-0 { animation-delay: 0s; }
+  .anim-delay-1 { animation-delay: 0.12s; }
+  .anim-delay-2 { animation-delay: 0.24s; }
+  .anim-delay-3 { animation-delay: 0.38s; }
+  .anim-delay-4 { animation-delay: 0.52s; }
+  .anim-delay-5 { animation-delay: 0.68s; }
+  .anim-delay-6 { animation-delay: 0.85s; }
+
+  /* Animated background blobs */
+  .blob { border-radius: 999px; filter: blur(90px); position: absolute; }
+  .blob-1 { animation: blob-1 18s ease-in-out infinite; }
+  .blob-2 { animation: blob-2 22s ease-in-out infinite; }
+  .blob-3 { animation: blob-3 16s ease-in-out infinite; }
+
+  /* Phone call rings */
+  .ring-1 { animation: ring-expand 2.8s ease-out 0s   infinite; }
+  .ring-2 { animation: ring-expand 2.8s ease-out 0.9s infinite; }
+  .ring-3 { animation: ring-expand 2.8s ease-out 1.8s infinite; }
+
+  /* Floating cards */
+  .float-1 { animation: float-y         3.8s ease-in-out infinite; }
+  .float-2 { animation: float-y-delayed 4.4s ease-in-out infinite; }
+
+  /* Demo flow — shimmer connecting line */
+  .flow-shimmer {
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(99,102,241,0.7) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer-right 1.6s linear infinite;
+  }
+  .flow-shimmer-d1 { animation: shimmer-right 1.6s 0.5s linear infinite; background-size:200% 100%; }
+  .flow-shimmer-d2 { animation: shimmer-right 1.6s 1.0s linear infinite; background-size:200% 100%; }
+
+  /* Demo step glow sequence */
+  .step-pulse-1 { animation: step-glow 4.8s ease-in-out 0.0s infinite; }
+  .step-pulse-2 { animation: step-glow 4.8s ease-in-out 1.2s infinite; }
+  .step-pulse-3 { animation: step-glow 4.8s ease-in-out 2.4s infinite; }
+  .step-pulse-4 { animation: step-glow 4.8s ease-in-out 3.6s infinite; }
+
+  /* Ping dot */
+  .dot-ping { animation: dot-ping 1.2s cubic-bezier(0,0,0.2,1) infinite; }
+
+  /* Marquee */
+  .marquee { animation: marquee 20s linear infinite; }
+
+  /* Hero background */
+  .hero-bg {
+    background: #020817;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Glassmorphism card */
+  .glass {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.09);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Gradient text */
+  .text-gradient {
+    background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 55%, #34d399 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }
