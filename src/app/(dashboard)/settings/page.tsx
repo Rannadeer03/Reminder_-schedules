@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { ReminderSettingsForm } from "@/components/settings/reminder-settings-form";
 import { PhoneNumberForm } from "@/components/settings/phone-number-form";
 import { TestCallButton } from "@/components/settings/test-call-button";
+import { ReconnectCalendarButton } from "@/components/settings/reconnect-calendar-button";
 
 function SettingsSection({
   number,
@@ -82,6 +83,15 @@ export default async function SettingsPage() {
         description="Place a test call to verify your number and voice message are working correctly."
       >
         <TestCallButton phoneNumber={settings?.phoneNumber ?? null} />
+      </SettingsSection>
+
+      {/* Reconnect Google Calendar */}
+      <SettingsSection
+        number="04"
+        title="Google Calendar Connection"
+        description="Reconnect your Google account to refresh OAuth tokens if calendar sync stops working."
+      >
+        <ReconnectCalendarButton />
       </SettingsSection>
     </div>
   );
