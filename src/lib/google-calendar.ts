@@ -42,36 +42,12 @@ async function getValidTokens(userId: string) {
   return oauth2Client;
 }
 
-export async function syncCalendarEvents(userId: string): Promise<number> {
-  const auth = await getValidTokens(userId);
-  const calendar = google.calendar({ version: "v3", auth });
-
-  const conn = await db.calendarConnection.findUnique({ where: { userId } });
-  if (!conn) throw new Error("No calendar connection");
-
-  // Fetch events starting from now up to 7 days ahead
-  const timeMin = new Date().toISOString();
-  const timeMax = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-  let params: calendar_v3.Params$Resource$Events$List = {
-    calendarId: conn.calendarId,
-    timeMin,
-    timeMax,
-    singleEvents: true,
-    orderBy: "startTime",
-    maxResults: 250,
-  };
-
-  if (conn.syncToken) {
-    // Use incremental sync when possible
-    params = {
-      calendarId: conn.calendarId,
-      syncToken: conn.syncToken,
-      singleEvents: true,
-      maxResults: 250,
-    };
-  }
-
+async function fetchAndUpsertEvents(
+  userId: string,
+  calendar: ReturnType<typeof google.calendar>,
+  conn: NonNullable<Awaited<ReturnType<typeof db.calendarConnection.findUnique>>>,
+  params: calendar_v3.Params$Resource$Events$List
+): Promise<{ synced: number; nextSyncToken: string | null | undefined }> {
   const response = await calendar.events.list(params);
   const items = response.data.items ?? [];
   let synced = 0;
@@ -80,13 +56,13 @@ export async function syncCalendarEvents(userId: string): Promise<number> {
     if (!item.id || !item.summary) continue;
 
     const startRaw = item.start?.dateTime ?? item.start?.date;
-    const endRaw = item.end?.dateTime ?? item.end?.date;
+    const endRaw   = item.end?.dateTime   ?? item.end?.date;
     if (!startRaw || !endRaw) continue;
 
     const startTime = new Date(startRaw);
-    const endTime = new Date(endRaw);
-    const timezone = item.start?.timeZone ?? "UTC";
-    const status = (item.status as string) ?? "confirmed";
+    const endTime   = new Date(endRaw);
+    const timezone  = item.start?.timeZone ?? "UTC";
+    const status    = (item.status as string) ?? "confirmed";
 
     if (status === "cancelled") {
       await db.calendarEvent.updateMany({
@@ -106,8 +82,8 @@ export async function syncCalendarEvents(userId: string): Promise<number> {
         startTime,
         endTime,
         timezone,
-        location: item.location ?? null,
-        description: item.description ?? null,
+        location:    item.location        ?? null,
+        description: item.description     ?? null,
         recurrenceId: item.recurringEventId ?? null,
         isRecurring: !!item.recurringEventId,
         status,
@@ -118,7 +94,7 @@ export async function syncCalendarEvents(userId: string): Promise<number> {
         startTime,
         endTime,
         timezone,
-        location: item.location ?? null,
+        location:    item.location    ?? null,
         description: item.description ?? null,
         status,
         updatedAt: new Date(),
@@ -127,16 +103,73 @@ export async function syncCalendarEvents(userId: string): Promise<number> {
     synced++;
   }
 
-  // Persist sync token for incremental syncs
-  if (response.data.nextSyncToken) {
-    await db.calendarConnection.update({
-      where: { userId },
-      data: {
-        syncToken: response.data.nextSyncToken,
-        lastSyncedAt: new Date(),
-      },
-    });
+  return { synced, nextSyncToken: response.data.nextSyncToken };
+}
+
+export async function syncCalendarEvents(userId: string): Promise<number> {
+  const oauthClient = await getValidTokens(userId);
+  const calendar    = google.calendar({ version: "v3", auth: oauthClient });
+
+  const conn = await db.calendarConnection.findUnique({ where: { userId } });
+  if (!conn) throw new Error("No calendar connection");
+
+  const timeMin = new Date().toISOString();
+  const timeMax = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const fullSyncParams: calendar_v3.Params$Resource$Events$List = {
+    calendarId: conn.calendarId,
+    timeMin,
+    timeMax,
+    singleEvents: true,
+    orderBy: "startTime",
+    maxResults: 250,
+  };
+
+  let synced = 0;
+  let nextSyncToken: string | null | undefined;
+
+  if (conn.syncToken) {
+    try {
+      // Incremental sync — only fetch changes since last sync
+      const result = await fetchAndUpsertEvents(userId, calendar, conn, {
+        calendarId: conn.calendarId,
+        syncToken: conn.syncToken,
+        singleEvents: true,
+        maxResults: 250,
+      });
+      synced        = result.synced;
+      nextSyncToken = result.nextSyncToken;
+    } catch (err: unknown) {
+      // 410 Gone = sync token expired; clear it and fall back to full sync
+      const status = (err as { status?: number; code?: number })?.status
+                   ?? (err as { status?: number; code?: number })?.code;
+      if (status === 410) {
+        console.warn(`[google-calendar] Sync token expired for user ${userId}, doing full sync`);
+        await db.calendarConnection.update({
+          where: { userId },
+          data: { syncToken: null },
+        });
+        const result = await fetchAndUpsertEvents(userId, calendar, conn, fullSyncParams);
+        synced        = result.synced;
+        nextSyncToken = result.nextSyncToken;
+      } else {
+        throw err;
+      }
+    }
+  } else {
+    const result = await fetchAndUpsertEvents(userId, calendar, conn, fullSyncParams);
+    synced        = result.synced;
+    nextSyncToken = result.nextSyncToken;
   }
+
+  // Always update lastSyncedAt — even when there are zero changes
+  await db.calendarConnection.update({
+    where: { userId },
+    data: {
+      lastSyncedAt: new Date(),
+      ...(nextSyncToken ? { syncToken: nextSyncToken } : {}),
+    },
+  });
 
   return synced;
 }

@@ -116,6 +116,7 @@ export default async function DashboardPage() {
             phoneNumber={settings?.phoneNumber ?? null}
             isActive={settings?.isActive ?? false}
             reminderMinutes={settings?.reminderMinutes ?? 10}
+            timezone={displayTimezone}
           />
         </div>
         <div className="lg:col-span-2">

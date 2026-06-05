@@ -6,6 +6,7 @@ interface ConnectionStatusProps {
   phoneNumber: string | null;
   isActive: boolean;
   reminderMinutes: number;
+  timezone?: string;
 }
 
 export function ConnectionStatus({
@@ -14,6 +15,7 @@ export function ConnectionStatus({
   phoneNumber,
   isActive,
   reminderMinutes,
+  timezone = "UTC",
 }: ConnectionStatusProps) {
   return (
     <div className="glass rounded-2xl h-full">
@@ -43,7 +45,7 @@ export function ConnectionStatus({
               <p className="font-body text-xs truncate text-slate-500">{calendarEmail}</p>
             )}
             {lastSynced && (
-              <p className="font-body text-xs text-slate-500">Last synced {formatDateTime(lastSynced)}</p>
+              <p className="font-body text-xs text-slate-500">Last synced {formatDateTime(lastSynced, timezone)}</p>
             )}
           </div>
         </div>
