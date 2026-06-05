@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -19,7 +21,14 @@ export async function GET(request: NextRequest) {
     },
     orderBy: { startTime: "asc" },
     take: limit,
-    include: {
+    select: {
+      id: true,
+      title: true,
+      startTime: true,
+      endTime: true,
+      timezone: true,
+      location: true,
+      htmlLink: true,
       reminders: {
         select: { status: true, sentAt: true, callSid: true },
         take: 1,

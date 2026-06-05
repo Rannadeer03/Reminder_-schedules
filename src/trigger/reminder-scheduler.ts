@@ -11,13 +11,14 @@ export const reminderSchedulerTask = schedules.task({
   run: async () => {
     console.log("[reminder-scheduler] Checking for upcoming meetings");
 
-    // Find all active users with phone numbers set
     const usersWithSettings = await db.settings.findMany({
-      where: {
-        isActive: true,
-        phoneNumber: { not: null },
+      where: { isActive: true, phoneNumber: { not: null } },
+      select: {
+        userId: true,
+        phoneNumber: true,
+        reminderMinutes: true,
+        voiceLanguage: true,
       },
-      include: { user: true },
     });
 
     if (usersWithSettings.length === 0) {
@@ -29,27 +30,34 @@ export const reminderSchedulerTask = schedules.task({
     let called = 0;
 
     for (const settings of usersWithSettings) {
-      const reminderMinutes = settings.reminderMinutes;
+      const { reminderMinutes } = settings;
 
-      // Window: meetings starting between (reminderMinutes-1) and (reminderMinutes+1) minutes from now
       const windowStart = new Date(Date.now() + (reminderMinutes - 1) * 60 * 1000);
-      const windowEnd = new Date(Date.now() + (reminderMinutes + 1) * 60 * 1000);
+      const windowEnd   = new Date(Date.now() + (reminderMinutes + 1) * 60 * 1000);
 
+      // Batch: fetch events + their reminder status in one query (no N+1)
       const upcomingEvents = await db.calendarEvent.findMany({
         where: {
           userId: settings.userId,
           startTime: { gte: windowStart, lte: windowEnd },
           status: "confirmed",
         },
+        select: {
+          id: true,
+          title: true,
+          startTime: true,
+          reminders: {
+            where: { userId: settings.userId },
+            select: { id: true, status: true },
+            take: 1,
+          },
+        },
       });
 
       for (const event of upcomingEvents) {
         processed++;
 
-        // Check if reminder already sent for this event
-        const existing = await db.reminder.findUnique({
-          where: { eventId_userId: { eventId: event.id, userId: settings.userId } },
-        });
+        const existing = event.reminders[0];
 
         if (existing && existing.status !== ReminderStatus.PENDING) {
           console.log(
@@ -58,7 +66,6 @@ export const reminderSchedulerTask = schedules.task({
           continue;
         }
 
-        // Create or update reminder record
         const reminder = await db.reminder.upsert({
           where: { eventId_userId: { eventId: event.id, userId: settings.userId } },
           create: {
@@ -85,22 +92,13 @@ export const reminderSchedulerTask = schedules.task({
 
           await db.reminder.update({
             where: { id: reminder.id },
-            data: {
-              status: ReminderStatus.SENT,
-              sentAt: new Date(),
-              callSid,
-            },
+            data: { status: ReminderStatus.SENT, sentAt: new Date(), callSid },
           });
 
-          console.log(
-            `[reminder-scheduler] Call placed for event ${event.id}, SID: ${callSid}`
-          );
+          console.log(`[reminder-scheduler] Call placed for event ${event.id}, SID: ${callSid}`);
           called++;
         } catch (error) {
-          console.error(
-            `[reminder-scheduler] Failed to call for event ${event.id}:`,
-            error
-          );
+          console.error(`[reminder-scheduler] Failed to call for event ${event.id}:`, error);
           await db.reminder.update({
             where: { id: reminder.id },
             data: {
@@ -112,9 +110,7 @@ export const reminderSchedulerTask = schedules.task({
       }
     }
 
-    console.log(
-      `[reminder-scheduler] Done. Processed ${processed} events, placed ${called} calls`
-    );
+    console.log(`[reminder-scheduler] Done. Processed ${processed} events, placed ${called} calls`);
     return { processed, called };
   },
 });
