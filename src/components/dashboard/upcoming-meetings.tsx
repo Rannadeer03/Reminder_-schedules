@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatTime, minutesUntil } from "@/lib/utils";
 import type { CalendarEvent, Reminder } from "@prisma/client";
 
@@ -24,6 +28,44 @@ function ReminderPill({ status }: { status: string }) {
           style={{ background: cfg.bg, color: cfg.text }}>
       {cfg.label}
     </span>
+  );
+}
+
+function SkipButton({ eventId, initialSkipped }: { eventId: string; initialSkipped: boolean }) {
+  const router = useRouter();
+  const [skipped, setSkipped] = useState(initialSkipped);
+  const [loading, setLoading] = useState(false);
+
+  async function toggle() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/calendar/events/${eventId}/skip`, { method: "PATCH" });
+      if (res.ok) {
+        const data = await res.json();
+        setSkipped(data.skipped);
+        router.refresh();
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={loading}
+      title={skipped ? "Un-skip this event" : "Skip reminder for this event"}
+      className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded transition-all"
+      style={{
+        background: skipped ? "rgba(100,116,139,0.2)" : "rgba(100,116,139,0.1)",
+        color:      skipped ? "#94a3b8" : "#64748b",
+        border:     "1px solid rgba(100,116,139,0.2)",
+        opacity:    loading ? 0.5 : 1,
+        cursor:     loading ? "not-allowed" : "pointer",
+      }}
+    >
+      {skipped ? "Skipped" : "Skip"}
+    </button>
   );
 }
 
@@ -59,11 +101,15 @@ export function UpcomingMeetings({ events, timezone }: UpcomingMeetingsProps) {
           <div className="divide-y" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
             {events.map((event) => {
               const minsAway = minutesUntil(event.startTime);
-              const isSoon = minsAway > 0 && minsAway <= 15;
+              const isSoon   = minsAway > 0 && minsAway <= 15;
               const reminder = event.reminders[0];
 
               return (
-                <div key={event.id} className="flex gap-5 py-4">
+                <div
+                  key={event.id}
+                  className="flex gap-5 py-4"
+                  style={{ opacity: event.skipped ? 0.55 : 1 }}
+                >
                   {/* Date column */}
                   <div className="flex-shrink-0 text-center w-12">
                     <p className="font-body text-[9px] tracking-[0.2em] uppercase font-medium text-slate-600">
@@ -77,15 +123,36 @@ export function UpcomingMeetings({ events, timezone }: UpcomingMeetingsProps) {
 
                   {/* Detail column */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="font-body text-sm font-medium truncate text-white">{event.title}</p>
-                      {reminder && <ReminderPill status={reminder.status} />}
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <p className={`font-body text-sm font-medium truncate text-white ${event.skipped ? "line-through opacity-60" : ""}`}>
+                        {event.title}
+                      </p>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {reminder && <ReminderPill status={reminder.status} />}
+                        <SkipButton eventId={event.id} initialSkipped={event.skipped} />
+                      </div>
                     </div>
                     <p className="font-body text-xs mt-1 font-mono text-slate-500">
                       {formatTime(event.startTime, event.timezone || timezone)}
                       {event.location && ` · ${event.location}`}
                     </p>
-                    {isSoon && (
+                    {event.joinUrl && !event.skipped && (
+                      <a
+                        href={event.joinUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-body text-xs mt-1 inline-flex items-center gap-1"
+                        style={{ color: "#60a5fa" }}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+                          <polyline points="15 3 21 3 21 9"/>
+                          <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                        Join meeting
+                      </a>
+                    )}
+                    {isSoon && !event.skipped && (
                       <p className="font-body text-xs font-medium mt-1 text-blue-400">
                         Starting in {minsAway} minute{minsAway !== 1 ? "s" : ""}
                       </p>

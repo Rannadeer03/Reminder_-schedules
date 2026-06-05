@@ -24,6 +24,7 @@ const LANGUAGES = [
 interface ReminderSettingsFormProps {
   initialValues: {
     reminderMinutes: number;
+    reminderMinutes2: number | null;
     isActive: boolean;
     smsBackup: boolean;
     whatsappBackup: boolean;
@@ -34,16 +35,21 @@ interface ReminderSettingsFormProps {
 
 export function ReminderSettingsForm({ initialValues }: ReminderSettingsFormProps) {
   const [values, setValues] = useState(initialValues);
+  const [secondReminder, setSecondReminder] = useState(initialValues.reminderMinutes2 !== null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   async function handleSave() {
     setLoading(true);
     try {
+      const payload = {
+        ...values,
+        reminderMinutes2: secondReminder ? (values.reminderMinutes2 ?? 5) : null,
+      };
       const res = await fetch("/api/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -75,7 +81,7 @@ export function ReminderSettingsForm({ initialValues }: ReminderSettingsFormProp
       {/* Reminder timing */}
       <div>
         <Label htmlFor="minutes" className="text-sm font-medium">Minutes Before Meeting</Label>
-        <p className="text-xs text-muted-foreground mb-2">How early to place the call (1–60 minutes)</p>
+        <p className="text-xs text-muted-foreground mb-2">How early to place the first call (1–60 minutes)</p>
         <Input
           id="minutes"
           type="number"
@@ -85,6 +91,39 @@ export function ReminderSettingsForm({ initialValues }: ReminderSettingsFormProp
           onChange={(e) => setValues((p) => ({ ...p, reminderMinutes: parseInt(e.target.value) || 10 }))}
           className="w-28"
         />
+      </div>
+
+      {/* Second reminder */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <Label className="text-sm font-medium">Second Reminder</Label>
+            <p className="text-xs text-muted-foreground">Place a second call at a different time</p>
+          </div>
+          <Switch
+            checked={secondReminder}
+            onCheckedChange={(v) => {
+              setSecondReminder(v);
+              if (v) setValues((p) => ({ ...p, reminderMinutes2: p.reminderMinutes2 ?? 5 }));
+            }}
+          />
+        </div>
+        {secondReminder && (
+          <div className="ml-0 pt-1">
+            <Input
+              type="number"
+              min={1}
+              max={60}
+              value={values.reminderMinutes2 ?? 5}
+              onChange={(e) =>
+                setValues((p) => ({ ...p, reminderMinutes2: parseInt(e.target.value) || 5 }))
+              }
+              className="w-28"
+              placeholder="5"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Minutes before meeting for second call</p>
+          </div>
+        )}
       </div>
 
       {/* Voice language */}

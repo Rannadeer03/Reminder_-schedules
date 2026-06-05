@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { validateTwilioWebhook } from "@/lib/twilio";
+import { validateTwilioWebhook, sendSmsReminder } from "@/lib/twilio";
+import { tasks } from "@trigger.dev/sdk/v3";
 import { CallStatus, ReminderStatus } from "@prisma/client";
 
 const STATUS_MAP: Record<string, CallStatus> = {
@@ -21,11 +22,8 @@ export async function POST(request: NextRequest) {
 
   const formData = await request.formData();
   const params: Record<string, string> = {};
-  formData.forEach((value, key) => {
-    params[key] = value.toString();
-  });
+  formData.forEach((value, key) => { params[key] = value.toString(); });
 
-  // Validate webhook authenticity in production
   if (process.env.NODE_ENV === "production") {
     const isValid = await validateTwilioWebhook(signature, url, params);
     if (!isValid) {
@@ -38,11 +36,10 @@ export async function POST(request: NextRequest) {
   const callStatus = params["CallStatus"];
   const duration = params["CallDuration"] ? parseInt(params["CallDuration"]) : undefined;
 
-  if (!callSid || !callStatus) {
-    return new NextResponse("Bad Request", { status: 400 });
-  }
+  if (!callSid || !callStatus) return new NextResponse("Bad Request", { status: 400 });
 
   const mappedStatus = STATUS_MAP[callStatus] ?? CallStatus.FAILED;
+  const isTerminal = ["completed", "failed", "busy", "no-answer", "canceled"].includes(callStatus);
 
   try {
     await db.callLog.updateMany({
@@ -50,20 +47,61 @@ export async function POST(request: NextRequest) {
       data: {
         status: mappedStatus,
         duration: duration ?? null,
-        endedAt: ["completed", "failed", "busy", "no-answer", "canceled"].includes(callStatus)
-          ? new Date()
-          : null,
+        endedAt: isTerminal ? new Date() : null,
       },
     });
 
-    // If call completed successfully, ensure reminder is marked SENT
     if (callStatus === "completed") {
-      const log = await db.callLog.findUnique({ where: { callSid } });
-      if (log?.eventId) {
-        await db.reminder.updateMany({
-          where: { callSid, status: { not: ReminderStatus.SENT } },
-          data: { status: ReminderStatus.SENT },
-        });
+      await db.reminder.updateMany({
+        where: { callSid, status: { not: ReminderStatus.SENT } },
+        data: { status: ReminderStatus.SENT },
+      });
+    }
+
+    // SMS backup + auto-retry on no-answer or busy
+    if (callStatus === "no-answer" || callStatus === "busy") {
+      const log = await db.callLog.findUnique({
+        where: { callSid },
+        select: { userId: true, eventId: true },
+      });
+
+      if (log?.userId) {
+        const [settings, reminder] = await Promise.all([
+          db.settings.findUnique({
+            where: { userId: log.userId },
+            select: { smsBackup: true, phoneNumber: true, reminderMinutes: true },
+          }),
+          log.eventId
+            ? db.reminder.findFirst({
+                where: { eventId: log.eventId, userId: log.userId },
+                select: { id: true, retried: true },
+              })
+            : Promise.resolve(null),
+        ]);
+
+        // SMS backup
+        if (settings?.smsBackup && settings.phoneNumber && log.eventId) {
+          const event = await db.calendarEvent.findUnique({
+            where: { id: log.eventId },
+            select: { title: true },
+          });
+          if (event) {
+            await sendSmsReminder(
+              settings.phoneNumber,
+              event.title,
+              settings.reminderMinutes ?? 10,
+              log.userId
+            ).catch((e) => console.error("[webhooks/twilio] SMS backup failed:", e));
+          }
+        }
+
+        // Auto-retry once
+        if (reminder && !reminder.retried && log.eventId) {
+          await db.reminder.update({ where: { id: reminder.id }, data: { retried: true } });
+          tasks
+            .trigger("retry-reminder", { userId: log.userId, eventId: log.eventId })
+            .catch((e) => console.error("[webhooks/twilio] Failed to trigger retry:", e));
+        }
       }
     }
 

@@ -78,6 +78,10 @@ async function upsertEvents(
     const startTime = new Date(startRaw);
     const endTime   = new Date(endRaw);
     const timezone  = item.start?.timeZone ?? "UTC";
+    const joinUrl   =
+      item.conferenceData?.entryPoints?.find((ep) => ep.entryPointType === "video")?.uri ??
+      (item as { hangoutLink?: string }).hangoutLink ??
+      null;
 
     await db.calendarEvent.upsert({
       where: { googleEventId_userId: { googleEventId: item.id, userId } },
@@ -95,6 +99,7 @@ async function upsertEvents(
         isRecurring:  !!item.recurringEventId,
         status:       (item.status as string) ?? "confirmed",
         htmlLink:     item.htmlLink ?? null,
+        joinUrl,
       },
       update: {
         title:       item.summary,
@@ -104,6 +109,7 @@ async function upsertEvents(
         location:    item.location    ?? null,
         description: item.description ?? null,
         status:      (item.status as string) ?? "confirmed",
+        joinUrl,
         updatedAt:   new Date(),
       },
     });

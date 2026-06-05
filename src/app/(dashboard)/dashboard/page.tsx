@@ -4,14 +4,43 @@ import { StatsCard } from "@/components/dashboard/stats-card";
 import { ConnectionStatus } from "@/components/dashboard/connection-status";
 import { UpcomingMeetings } from "@/components/dashboard/upcoming-meetings";
 import { CallLogs } from "@/components/dashboard/call-logs";
+import { CallChart } from "@/components/dashboard/call-chart";
 
 export const dynamic = "force-dynamic";
+
+function buildChartData(logs: { status: string; startedAt: Date }[]) {
+  const days: { day: string; date: Date }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push({ day: d.toLocaleDateString("en-US", { weekday: "short" }), date: d });
+  }
+
+  return days.map(({ day, date }) => {
+    const dayLogs = logs.filter((l) => {
+      const d = new Date(l.startedAt);
+      return (
+        d.getFullYear() === date.getFullYear() &&
+        d.getMonth()    === date.getMonth() &&
+        d.getDate()     === date.getDate()
+      );
+    });
+    return {
+      day,
+      Completed:    dayLogs.filter((l) => l.status === "COMPLETED").length,
+      "No Answer":  dayLogs.filter((l) => l.status === "NO_ANSWER" || l.status === "BUSY").length,
+      Failed:       dayLogs.filter((l) => l.status === "FAILED").length,
+    };
+  });
+}
 
 export default async function DashboardPage() {
   const session = await auth();
   const userId = session!.user!.id!;
 
-  const [settings, calendarConn, upcomingEvents, recentCalls, reminderStats] =
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const [settings, calendarConn, upcomingEvents, recentCalls, reminderStats, chartLogs] =
     await Promise.all([
       db.settings.findUnique({ where: { userId } }),
       db.calendarConnection.findUnique({
@@ -36,17 +65,24 @@ export default async function DashboardPage() {
         where: { userId },
         _count: { status: true },
       }),
+      db.callLog.findMany({
+        where: { userId, startedAt: { gte: sevenDaysAgo } },
+        select: { status: true, startedAt: true },
+      }),
     ]);
 
   const sentCount   = reminderStats.find((s) => s.status === "SENT")?._count.status   ?? 0;
   const failedCount = reminderStats.find((s) => s.status === "FAILED")?._count.status ?? 0;
 
-  // Use event timezone when user hasn't explicitly set a timezone preference
   const displayTimezone =
     settings?.timezone && settings.timezone !== "UTC"
       ? settings.timezone
       : upcomingEvents.find((e) => e.timezone && e.timezone !== "UTC")?.timezone ??
         settings?.timezone ?? "UTC";
+
+  const chartData = buildChartData(
+    chartLogs.map((l) => ({ status: l.status as string, startedAt: l.startedAt }))
+  );
 
   return (
     <div className="space-y-10">
@@ -106,6 +142,9 @@ export default async function DashboardPage() {
           description={failedCount > 0 ? `${failedCount} failed` : "All systems normal"}
         />
       </div>
+
+      {/* Call analytics chart */}
+      <CallChart data={chartData} />
 
       {/* Connection + Upcoming */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

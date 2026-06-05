@@ -67,6 +67,7 @@ export default async function SettingsPage() {
         <ReminderSettingsForm
           initialValues={{
             reminderMinutes:  settings?.reminderMinutes  ?? 10,
+            reminderMinutes2: settings?.reminderMinutes2 ?? null,
             isActive:         settings?.isActive         ?? true,
             smsBackup:        settings?.smsBackup        ?? false,
             whatsappBackup:   settings?.whatsappBackup   ?? false,

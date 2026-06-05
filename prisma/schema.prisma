@@ -98,6 +98,8 @@ model CalendarEvent {
   isRecurring   Boolean   @default(false)
   status        String    @default("confirmed") // confirmed | tentative | cancelled
   htmlLink      String?
+  joinUrl       String?
+  skipped       Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -117,6 +119,7 @@ model Reminder {
   sentAt      DateTime?
   callSid     String?
   errorMsg    String?
+  retried     Boolean        @default(false)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
@@ -151,8 +154,9 @@ model Settings {
   id              String   @id @default(cuid())
   userId          String   @unique
   phoneNumber     String?
-  reminderMinutes Int      @default(10)
-  isActive        Boolean  @default(true)
+  reminderMinutes  Int      @default(10)
+  reminderMinutes2 Int?
+  isActive         Boolean  @default(true)
   smsBackup       Boolean  @default(false)
   whatsappBackup  Boolean  @default(false)
   voiceLanguage   String   @default("en-US")

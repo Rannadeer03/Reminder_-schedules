@@ -14,6 +14,7 @@ export const settingsSchema = z.object({
     .enum(["en-US", "en-GB", "es-ES", "es-MX", "fr-FR", "de-DE", "it-IT", "pt-BR", "ja-JP"])
     .default("en-US"),
   timezone: z.string().default("UTC"),
+  reminderMinutes2: z.coerce.number().int().min(1).max(60).nullable().optional(),
 });
 
 export const testCallSchema = z.object({

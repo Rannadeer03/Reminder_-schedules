@@ -8,8 +8,13 @@ function getClient() {
   return twilio(sid, token);
 }
 
-export function buildReminderTwiml(eventTitle: string, language = "en-US"): string {
-  const message = `Hello. You have a meeting in 10 minutes. Meeting title: ${eventTitle}.`;
+export function buildReminderTwiml(
+  eventTitle: string,
+  language = "en-US",
+  joinUrl?: string | null
+): string {
+  const joinPart = joinUrl ? ` To join, go to ${joinUrl}` : "";
+  const message = `Hello. You have a meeting in a few minutes. Meeting title: ${eventTitle}.${joinPart}`;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="alice" language="${language}">${escapeXml(message)}</Say>
@@ -32,14 +37,13 @@ export async function placeReminderCall(
   eventId: string,
   toNumber: string,
   eventTitle: string,
-  language = "en-US"
+  language = "en-US",
+  joinUrl?: string | null
 ): Promise<string> {
   const client = getClient();
   const from = process.env.TWILIO_PHONE_NUMBER!;
-  const webhookUrl = `${process.env.TWILIO_WEBHOOK_URL}`;
-  const twiml = buildReminderTwiml(eventTitle, language);
+  const twiml = buildReminderTwiml(eventTitle, language, joinUrl);
 
-  // Use TwiML Bins or a status callback URL
   const call = await client.calls.create({
     to: toNumber,
     from,
@@ -50,7 +54,6 @@ export async function placeReminderCall(
     timeout: 30,
   });
 
-  // Log the call
   await db.callLog.create({
     data: {
       userId,
@@ -66,17 +69,28 @@ export async function placeReminderCall(
   return call.sid;
 }
 
+export async function sendSmsReminder(
+  toNumber: string,
+  eventTitle: string,
+  minutesBefore: number,
+  userId: string
+): Promise<void> {
+  const client = getClient();
+  const from = process.env.TWILIO_PHONE_NUMBER!;
+  const body = `Reminder: "${eventTitle}" starts in ${minutesBefore} min.`;
+  const msg = await client.messages.create({ to: toNumber, from, body });
+  console.log(`[twilio] SMS sent to ${toNumber}, SID: ${msg.sid}`);
+  await db.callLog.create({
+    data: { userId, toNumber, fromNumber: from, status: "COMPLETED", twimlScript: body },
+  });
+}
+
 export async function sendTestCall(toNumber: string, userId: string): Promise<string> {
   const client = getClient();
   const from = process.env.TWILIO_PHONE_NUMBER!;
   const twiml = buildReminderTwiml("Test Meeting — this is a test reminder call");
 
-  const call = await client.calls.create({
-    to: toNumber,
-    from,
-    twiml,
-    timeout: 30,
-  });
+  const call = await client.calls.create({ to: toNumber, from, twiml, timeout: 30 });
 
   await db.callLog.create({
     data: {
