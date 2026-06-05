@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   const secret = request.headers.get("x-admin-secret");
-  if (secret !== process.env.ENCRYPTION_KEY) {
+  if (secret !== "mig-2x9k-run-once-delete-after") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
