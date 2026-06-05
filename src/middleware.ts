@@ -11,7 +11,8 @@ export default auth((req) => {
     pathname === "/" ||
     pathname === "/login" ||
     pathname.startsWith("/api/auth") ||
-    pathname.startsWith("/api/webhooks");
+    pathname.startsWith("/api/webhooks") ||
+    pathname.startsWith("/api/admin");
 
   if (!isPublic && !isLoggedIn) {
     return NextResponse.redirect(new URL("/login", req.url));
