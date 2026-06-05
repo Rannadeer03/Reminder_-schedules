@@ -12,11 +12,13 @@ const config: Config = {
     container: {
       center: true,
       padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
+      screens: { "2xl": "1400px" },
     },
     extend: {
+      fontFamily: {
+        display: ["var(--font-display)", "Georgia", "serif"],
+        body: ["var(--font-body)", "system-ui", "sans-serif"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -50,6 +52,29 @@ const config: Config = {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        // Design tokens
+        gold: {
+          DEFAULT: "#C9A96E",
+          light: "#D4B882",
+          dark: "#A88844",
+          muted: "#8A7050",
+        },
+        ink: {
+          DEFAULT: "#0C0A08",
+          surface: "#161311",
+          border: "#2C2820",
+          muted: "#8A8278",
+        },
+        cream: {
+          DEFAULT: "#EDE8DF",
+          muted: "#A09890",
+        },
+        parchment: {
+          DEFAULT: "#F4F0EB",
+          surface: "#FDFCFA",
+          border: "#E2DDD5",
+          muted: "#7A756E",
         },
       },
       borderRadius: {

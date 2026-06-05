@@ -1,5 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
-
 interface StatsCardProps {
   title: string;
   value: string | number;
@@ -9,21 +7,30 @@ interface StatsCardProps {
 
 export function StatsCard({ title, value, icon, description }: StatsCardProps) {
   return (
-    <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold mt-1">{value}</p>
-            {description && (
-              <p className="text-xs text-muted-foreground mt-1 truncate max-w-[160px]">
-                {description}
-              </p>
-            )}
-          </div>
-          <div className="bg-slate-100 rounded-lg p-2.5">{icon}</div>
-        </div>
-      </CardContent>
-    </Card>
+    <div
+      className="p-6 border"
+      style={{ background: "#FDFCFA", borderColor: "#E2DDD5" }}
+    >
+      <div className="flex items-start justify-between mb-4">
+        <p
+          className="font-body text-[10px] tracking-[0.22em] uppercase font-medium"
+          style={{ color: "#A09880" }}
+        >
+          {title}
+        </p>
+        <div style={{ color: "#C9A96E", opacity: 0.7 }}>{icon}</div>
+      </div>
+      <p
+        className="font-display text-4xl font-semibold leading-none mb-2"
+        style={{ color: "#1C1914" }}
+      >
+        {value}
+      </p>
+      {description && (
+        <p className="font-body text-xs mt-1 truncate" style={{ color: "#A09880" }}>
+          {description}
+        </p>
+      )}
+    </div>
   );
 }

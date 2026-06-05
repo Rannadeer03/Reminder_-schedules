@@ -3,63 +3,95 @@ import { db } from "@/lib/db";
 import { ReminderSettingsForm } from "@/components/settings/reminder-settings-form";
 import { PhoneNumberForm } from "@/components/settings/phone-number-form";
 import { TestCallButton } from "@/components/settings/test-call-button";
-import { Separator } from "@/components/ui/separator";
+
+function SettingsSection({
+  number,
+  title,
+  description,
+  children,
+}: {
+  number: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border" style={{ background: "#FDFCFA", borderColor: "#E2DDD5" }}>
+      <div className="px-8 pt-7 pb-5 border-b" style={{ borderColor: "#E2DDD5" }}>
+        <div className="flex items-start gap-4">
+          <span
+            className="font-body text-[10px] tracking-[0.25em] uppercase font-medium mt-1"
+            style={{ color: "#C9A96E" }}
+          >
+            {number}
+          </span>
+          <div>
+            <h2 className="font-display text-xl italic" style={{ color: "#1C1914" }}>
+              {title}
+            </h2>
+            <p className="font-body text-sm mt-1" style={{ color: "#7A756E" }}>
+              {description}
+            </p>
+          </div>
+        </div>
+      </div>
+      <div className="px-8 py-7">{children}</div>
+    </div>
+  );
+}
 
 export default async function SettingsPage() {
   const session = await auth();
   const userId = session!.user!.id!;
-
   const settings = await db.settings.findUnique({ where: { userId } });
 
   return (
-    <div className="space-y-8 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
-        <p className="text-slate-500 mt-1">Configure your call reminder preferences.</p>
+    <div className="space-y-10 max-w-2xl">
+      {/* Page heading */}
+      <div className="border-b pb-8" style={{ borderColor: "#E2DDD5" }}>
+        <h1 className="font-display text-4xl italic" style={{ color: "#1C1914" }}>
+          Settings
+        </h1>
+        <p className="font-body text-sm mt-1.5" style={{ color: "#7A756E" }}>
+          Configure your call reminder preferences.
+        </p>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
-        {/* Phone Number */}
-        <div className="p-6">
-          <h2 className="text-base font-semibold text-slate-900 mb-1">Phone Number</h2>
-          <p className="text-sm text-slate-500 mb-4">
-            The number we&apos;ll call 10 minutes before your meetings. Must be in E.164 format
-            (e.g. +15551234567).
-          </p>
-          <PhoneNumberForm initialPhone={settings?.phoneNumber ?? ""} />
-        </div>
+      {/* Phone Number */}
+      <SettingsSection
+        number="01"
+        title="Phone Number"
+        description="The number we'll call before your meetings. Use E.164 format — e.g. +15551234567."
+      >
+        <PhoneNumberForm initialPhone={settings?.phoneNumber ?? ""} />
+      </SettingsSection>
 
-        <Separator />
+      {/* Reminder Settings */}
+      <SettingsSection
+        number="02"
+        title="Reminder Preferences"
+        description="Customize timing, backup notifications, and voice language."
+      >
+        <ReminderSettingsForm
+          initialValues={{
+            reminderMinutes:  settings?.reminderMinutes  ?? 10,
+            isActive:         settings?.isActive         ?? true,
+            smsBackup:        settings?.smsBackup        ?? false,
+            whatsappBackup:   settings?.whatsappBackup   ?? false,
+            voiceLanguage:    settings?.voiceLanguage    ?? "en-US",
+            timezone:         settings?.timezone         ?? "UTC",
+          }}
+        />
+      </SettingsSection>
 
-        {/* Reminder Settings */}
-        <div className="p-6">
-          <h2 className="text-base font-semibold text-slate-900 mb-1">Reminder Preferences</h2>
-          <p className="text-sm text-slate-500 mb-4">
-            Customize timing, backup notifications, and voice language.
-          </p>
-          <ReminderSettingsForm
-            initialValues={{
-              reminderMinutes: settings?.reminderMinutes ?? 10,
-              isActive: settings?.isActive ?? true,
-              smsBackup: settings?.smsBackup ?? false,
-              whatsappBackup: settings?.whatsappBackup ?? false,
-              voiceLanguage: settings?.voiceLanguage ?? "en-US",
-              timezone: settings?.timezone ?? "UTC",
-            }}
-          />
-        </div>
-
-        <Separator />
-
-        {/* Test Call */}
-        <div className="p-6">
-          <h2 className="text-base font-semibold text-slate-900 mb-1">Test Reminder Call</h2>
-          <p className="text-sm text-slate-500 mb-4">
-            Place a test call to your phone number to verify everything is working.
-          </p>
-          <TestCallButton phoneNumber={settings?.phoneNumber ?? null} />
-        </div>
-      </div>
+      {/* Test Call */}
+      <SettingsSection
+        number="03"
+        title="Test Call"
+        description="Place a test call to verify your number and voice message are working correctly."
+      >
+        <TestCallButton phoneNumber={settings?.phoneNumber ?? null} />
+      </SettingsSection>
     </div>
   );
 }
